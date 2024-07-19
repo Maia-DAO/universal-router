@@ -42,4 +42,12 @@ abstract contract Permit2Payments is Payments {
         if (payer == address(this)) pay(token, recipient, amount);
         else permit2TransferFrom(token, payer, recipient, amount.toUint160());
     }
+
+    /// @notice Either performs a transferFrom to this address on Permit2 or does nothing if the payer is this address
+    /// @param token The token to transfer
+    /// @param payer The address to pay for the transfer
+    /// @param amount The amount to transfer
+    function permit2TransferToThisAddress(address token, address payer, uint256 amount) internal {
+        if (payer != address(this)) permit2TransferFrom(token, payer, address(this), amount.toUint160());
+    }
 }

@@ -70,5 +70,28 @@ library Commands {
     uint256 constant SEAPORT_V1_4 = 0x20;
     uint256 constant EXECUTE_SUB_PLAN = 0x21;
     uint256 constant APPROVE_ERC20 = 0x22;
-    // COMMAND_PLACEHOLDER for 0x23 to 0x3f (all unused)
+    // COMMAND_PLACEHOLDER for 0x22 to 0x27 (all unused)
+
+    // The commands are executed in nested if blocks to minimise gas consumption
+    // The following constant defines one of the boundaries where the if blocks split commands
+    uint256 constant FIFTH_IF_BOUNDARY = 0x28;
+
+    // New ERC4626 and Balancer commands
+    uint256 constant ERC4626_DEPOSIT = 0x28;
+    uint256 constant ERC4626_REDEEM = 0x29;
+
+    uint256 constant ERC4626_MINT = 0x2A;
+    uint256 constant ERC4626_WITHDRAW = 0x2B;
+
+    uint256 constant APPROVE_ERC20_ADDRESS = 0x2C;
+
+    // The commands are executed in nested if blocks to minimise gas consumption
+    // The following constant defines one of the boundaries where the if blocks split commands
+    uint256 constant SIXTH_IF_BOUNDARY = 0x30;
+
+    uint256 constant BALANCER_BATCH_SWAPS_EXACT_IN = 0x30;
+    uint256 constant BALANCER_SINGLE_SWAP_EXACT_IN = 0x31;
+    uint256 constant BALANCER_BATCH_SWAPS_EXACT_OUT = 0x32;
+    uint256 constant BALANCER_SINGLE_SWAP_EXACT_OUT = 0x33;
+    // COMMAND_PLACEHOLDER for 0x33 to 0x3f (all unused)
 }

@@ -9,6 +9,7 @@ struct PaymentsParameters {
     address weth9;
     address openseaConduit;
     address sudoswap;
+    address balancerVault;
 }
 
 contract PaymentsImmutables {
@@ -24,9 +25,13 @@ contract PaymentsImmutables {
     // @dev The address of Sudoswap's router
     address internal immutable SUDOSWAP;
 
+    /// @dev The address of Balancer's vault
+    address internal immutable BALANCER_VAULT;
+
     enum Spenders {
         OSConduit,
-        Sudoswap
+        Sudoswap,
+        BalancerVault
     }
 
     constructor(PaymentsParameters memory params) {
@@ -34,5 +39,6 @@ contract PaymentsImmutables {
         PERMIT2 = IAllowanceTransfer(params.permit2);
         OPENSEA_CONDUIT = params.openseaConduit;
         SUDOSWAP = params.sudoswap;
+        BALANCER_VAULT = params.balancerVault;
     }
 }

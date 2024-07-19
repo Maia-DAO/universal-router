@@ -3,6 +3,8 @@ pragma solidity ^0.8.17;
 
 import {V2SwapRouter} from '../modules/uniswap/v2/V2SwapRouter.sol';
 import {V3SwapRouter} from '../modules/uniswap/v3/V3SwapRouter.sol';
+import {ERC4626Router} from '../modules/erc4626/ERC4626Router.sol';
+import {BalancerRouter} from '../modules/balancer/BalancerRouter.sol';
 import {BytesLib} from '../modules/uniswap/v3/BytesLib.sol';
 import {Payments} from '../modules/Payments.sol';
 import {PaymentsImmutables} from '../modules/PaymentsImmutables.sol';
@@ -13,12 +15,23 @@ import {LockAndMsgSender} from './LockAndMsgSender.sol';
 import {ERC721} from 'solmate/src/tokens/ERC721.sol';
 import {ERC1155} from 'solmate/src/tokens/ERC1155.sol';
 import {ERC20} from 'solmate/src/tokens/ERC20.sol';
+import {ERC4626} from 'solmate/src/tokens/ERC4626.sol';
 import {IAllowanceTransfer} from 'permit2/src/interfaces/IAllowanceTransfer.sol';
 import {ICryptoPunksMarket} from '../interfaces/external/ICryptoPunksMarket.sol';
+import {IAsset, IVault} from '../interfaces/external/IVault.sol';
 
 /// @title Decodes and Executes Commands
 /// @notice Called by the UniversalRouter contract to efficiently decode and execute a singular command
-abstract contract Dispatcher is NFTImmutables, Payments, V2SwapRouter, V3SwapRouter, Callbacks, LockAndMsgSender {
+abstract contract Dispatcher is
+    NFTImmutables,
+    Payments,
+    V2SwapRouter,
+    V3SwapRouter,
+    ERC4626Router,
+    BalancerRouter,
+    Callbacks,
+    LockAndMsgSender
+{
     using BytesLib for bytes;
 
     error InvalidCommandType(uint256 commandType);
@@ -328,32 +341,171 @@ abstract contract Dispatcher is NFTImmutables, Payments, V2SwapRouter, V3SwapRou
             }
             // 0x20 <= command
         } else {
-            if (command == Commands.SEAPORT_V1_4) {
-                /// @dev Seaport 1.4 and 1.5 allow for orders to be created by contracts.
-                ///     These orders pass control to the contract offerers during fufillment,
-                ///         allowing them to perform any number of destructive actions as a holder of the NFT.
-                ///     Integrators should be aware that in some scenarios: e.g. purchasing an NFT that allows the holder
-                ///         to claim another NFT, the contract offerer can "steal" the claim during order fufillment.
-                ///     For some such purchases, an OWNER_CHECK command can be prepended to ensure that all tokens have the desired owner at the end of the transaction.
-                ///     This is also outlined in the Seaport documentation: https://github.com/ProjectOpenSea/seaport/blob/main/docs/SeaportDocumentation.md
-                (uint256 value, bytes calldata data) = getValueAndData(inputs);
-                (success, output) = SEAPORT_V1_4.call{value: value}(data);
-            } else if (command == Commands.EXECUTE_SUB_PLAN) {
-                bytes calldata _commands = inputs.toBytes(0);
-                bytes[] calldata _inputs = inputs.toBytesArray(1);
-                (success, output) =
-                    (address(this)).call(abi.encodeWithSelector(Dispatcher.execute.selector, _commands, _inputs));
-            } else if (command == Commands.APPROVE_ERC20) {
-                ERC20 token;
-                PaymentsImmutables.Spenders spender;
-                assembly {
-                    token := calldataload(inputs.offset)
-                    spender := calldataload(add(inputs.offset, 0x20))
+            // 0x20 <= command < 0x28
+            if (command < Commands.FIFTH_IF_BOUNDARY) {
+                if (command == Commands.SEAPORT_V1_4) {
+                    /// @dev Seaport 1.4 and 1.5 allow for orders to be created by contracts.
+                    ///     These orders pass control to the contract offerers during fufillment,
+                    ///         allowing them to perform any number of destructive actions as a holder of the NFT.
+                    ///     Integrators should be aware that in some scenarios: e.g. purchasing an NFT that allows the holder
+                    ///         to claim another NFT, the contract offerer can "steal" the claim during order fufillment.
+                    ///     For some such purchases, an OWNER_CHECK command can be prepended to ensure that all tokens have the desired owner at the end of the transaction.
+                    ///     This is also outlined in the Seaport documentation: https://github.com/ProjectOpenSea/seaport/blob/main/docs/SeaportDocumentation.md
+                    (uint256 value, bytes calldata data) = getValueAndData(inputs);
+                    (success, output) = SEAPORT_V1_4.call{value: value}(data);
+                } else if (command == Commands.EXECUTE_SUB_PLAN) {
+                    bytes calldata _commands = inputs.toBytes(0);
+                    bytes[] calldata _inputs = inputs.toBytesArray(1);
+                    (success, output) =
+                        (address(this)).call(abi.encodeWithSelector(Dispatcher.execute.selector, _commands, _inputs));
+                } else if (command == Commands.APPROVE_ERC20) {
+                    ERC20 token;
+                    PaymentsImmutables.Spenders spender;
+                    assembly {
+                        token := calldataload(inputs.offset)
+                        spender := calldataload(add(inputs.offset, 0x20))
+                    }
+                    Payments.approveERC20(token, spender);
+                } else {
+                    // placeholder area for commands 0x22-0x27
+                    revert InvalidCommandType(command);
                 }
-                Payments.approveERC20(token, spender);
+                // 0x28 <= command < 0x40
             } else {
-                // placeholder area for commands 0x23-0x3f
-                revert InvalidCommandType(command);
+                // 0x28 <= command < 0x30
+                if (command < Commands.SIXTH_IF_BOUNDARY) {
+                    if (command == Commands.ERC4626_DEPOSIT) {
+                        // equivalent: abi.decode(inputs, (address, uint256, bool, uint256, address))
+                        (ERC4626 vault, uint256 assets, bool payerIsUser, uint256 minShares, address recipient) =
+                            decodeERC4626Command(inputs);
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        erc4626Deposit(vault, assets, payer, minShares, map(recipient));
+                    } else if (command == Commands.ERC4626_REDEEM) {
+                        // equivalent: abi.decode(inputs, (address, uint256, bool, uint256, address))
+                        (ERC4626 vault, uint256 shares, bool payerIsUser, uint256 minAssets, address recipient) =
+                            decodeERC4626Command(inputs);
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        erc4626Redeem(vault, shares, payer, minAssets, map(recipient));
+                    } else if (command == Commands.ERC4626_MINT) {
+                        // equivalent: abi.decode(inputs, (address, uint256, bool, uint256, address))
+                        (ERC4626 vault, uint256 shares, bool payerIsUser, uint256 maxAssets, address recipient) =
+                            decodeERC4626Command(inputs);
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        erc4626Mint(vault, shares, payer, maxAssets, map(recipient));
+                    } else if (command == Commands.ERC4626_WITHDRAW) {
+                        // equivalent: abi.decode(inputs, (address, uint256, bool, uint256, address))
+                        (ERC4626 vault, uint256 assets, bool payerIsUser, uint256 maxShares, address recipient) =
+                            decodeERC4626Command(inputs);
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        erc4626Withdraw(vault, assets, payer, maxShares, map(recipient));
+                    } else if (command == Commands.APPROVE_ERC20_ADDRESS) {
+                        // equivalent: abi.decode(inputs, (address, address))
+                        ERC20 token;
+                        address spender;
+                        assembly {
+                            token := calldataload(inputs.offset)
+                            spender := calldataload(add(inputs.offset, 0x20))
+                        }
+                        Payments.approveERC20(token, spender);
+                    } else {
+                        // placeholder area for commands 0x2d-0x2f
+                        revert InvalidCommandType(command);
+                    }
+                    // 0x30 <= command < 0x40
+                } else {
+                    if (command == Commands.BALANCER_BATCH_SWAPS_EXACT_IN) {
+                        // During multi-hop swaps, it's not always possible to know the value of the amount for a given step.
+                        // If BatchSwapStep.amount to 0, the vault will use the full output of the previous hop.
+                        IVault.BatchSwapStep[] memory swaps;
+                        IAsset[] memory assets;
+                        int256[] memory limits;
+                        bool payerIsUser;
+                        address payable recipient;
+
+                        (swaps, assets, limits, payerIsUser, recipient) =
+                            abi.decode(inputs, (IVault.BatchSwapStep[], IAsset[], int256[], bool, address));
+
+                        recipient = payable(map(recipient));
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        balancerBatchSwapExactIn(swaps, assets, limits, payer, recipient);
+                    } else if (command == Commands.BALANCER_SINGLE_SWAP_EXACT_IN) {
+                        // equivalent: abi.decode(inputs, (bytes32, address, address, uint256, uint256, bool, address, bytes))
+                        bytes32 poolId;
+                        address assetIn;
+                        address assetOut;
+                        uint256 amount;
+                        uint256 limit;
+                        bool payerIsUser;
+                        address payable recipient;
+
+                        assembly {
+                            poolId := calldataload(inputs.offset)
+                            assetIn := calldataload(add(inputs.offset, 0x20))
+                            assetOut := calldataload(add(inputs.offset, 0x40))
+                            amount := calldataload(add(inputs.offset, 0x60))
+                            limit := calldataload(add(inputs.offset, 0x80))
+                            payerIsUser := calldataload(add(inputs.offset, 0xa0))
+                            recipient := calldataload(add(inputs.offset, 0xc0))
+                        }
+
+                        bytes calldata userData = inputs.toBytes(7);
+
+                        recipient = payable(map(recipient));
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        balancerSingleSwapExactIn(poolId, assetIn, assetOut, amount, limit, payer, recipient, userData);
+                    } else if (command == Commands.BALANCER_BATCH_SWAPS_EXACT_OUT) {
+                        // During multi-hop swaps, it's not always possible to know the value of the amount for a given step.
+                        // If BatchSwapStep.amount to 0, the vault will use the full output of the previous hop.
+                        IVault.BatchSwapStep[] memory swaps;
+                        IAsset[] memory assets;
+                        int256[] memory limits;
+                        bool payerIsUser;
+                        address payable recipient;
+
+                        (swaps, assets, limits, payerIsUser, recipient) =
+                            abi.decode(inputs, (IVault.BatchSwapStep[], IAsset[], int256[], bool, address));
+
+                        recipient = payable(map(recipient));
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        balancerBatchSwapExactOut(swaps, assets, limits, payer, recipient);
+                    } else if (command == Commands.BALANCER_SINGLE_SWAP_EXACT_OUT) {
+                        // equivalent: abi.decode(inputs, (bytes32, address, address, uint256, uint256, bool, address, bytes))
+                        bytes32 poolId;
+                        address assetIn;
+                        address assetOut;
+                        uint256 amount;
+                        uint256 limit;
+                        bool payerIsUser;
+                        address payable recipient;
+
+                        assembly {
+                            poolId := calldataload(inputs.offset)
+                            assetIn := calldataload(add(inputs.offset, 0x20))
+                            assetOut := calldataload(add(inputs.offset, 0x40))
+                            amount := calldataload(add(inputs.offset, 0x60))
+                            limit := calldataload(add(inputs.offset, 0x80))
+                            payerIsUser := calldataload(add(inputs.offset, 0xa0))
+                            recipient := calldataload(add(inputs.offset, 0xc0))
+                        }
+
+                        bytes calldata userData = inputs.toBytes(7);
+
+                        recipient = payable(map(recipient));
+
+                        address payer = payerIsUser ? lockedBy : address(this);
+                        balancerSingleSwapExactOut(poolId, assetIn, assetOut, amount, limit, payer, recipient, userData);
+                    } else {
+                        // placeholder area for commands 0x34-0x3f
+                        revert InvalidCommandType(command);
+                    }
+                }
             }
         }
     }

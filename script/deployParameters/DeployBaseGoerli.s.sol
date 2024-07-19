@@ -25,6 +25,7 @@ contract DeployBaseGoerli is DeployUniversalRouter {
             looksRareToken: UNSUPPORTED_PROTOCOL,
             v2Factory: UNSUPPORTED_PROTOCOL,
             v3Factory: 0x9323c1d6D800ed51Bd7C6B216cfBec678B7d0BC2,
+            balancerVault: UNSUPPORTED_PROTOCOL,
             pairInitCodeHash: BYTES32_ZERO,
             poolInitCodeHash: 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54
         });

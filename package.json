@@ -1,20 +1,24 @@
 {
-  "name": "@uniswap/universal-router",
+  "name": "hermes-universal-router-contracts",
   "description": "Smart contracts for Universal Router",
   "license": "GPL-2.0-or-later",
   "publishConfig": {
     "access": "public"
   },
-  "version": "1.6.0",
+  "version": "1.0.0",
   "keywords": [
+    "maia",
+    "hermes",
     "uniswap",
+    "balancer",
+    "erc4626",
     "router",
     "universal router",
     "swap router"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Uniswap/universal-router"
+    "url": "https://github.com/Maia-DAO/universal-router"
   },
   "files": [
     "contracts/base",

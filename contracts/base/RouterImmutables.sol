@@ -20,6 +20,7 @@ struct RouterParameters {
     address looksRareToken;
     address v2Factory;
     address v3Factory;
+    address balancerVault;
     bytes32 pairInitCodeHash;
     bytes32 poolInitCodeHash;
 }

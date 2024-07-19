@@ -55,6 +55,7 @@ abstract contract DeployUniversalRouter is Script {
             looksRareToken: mapUnsupported(params.looksRareToken),
             v2Factory: mapUnsupported(params.v2Factory),
             v3Factory: mapUnsupported(params.v3Factory),
+            balancerVault: mapUnsupported(params.balancerVault),
             pairInitCodeHash: params.pairInitCodeHash,
             poolInitCodeHash: params.poolInitCodeHash
         });

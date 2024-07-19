@@ -46,8 +46,17 @@ abstract contract Payments is PaymentsImmutables {
         /// @dev use 0 = Opensea Conduit for both Seaport v1.4 and v1.5
         if (spender == Spenders.OSConduit) spenderAddress = OPENSEA_CONDUIT;
         else if (spender == Spenders.Sudoswap) spenderAddress = SUDOSWAP;
+        else if (spender == Spenders.BalancerVault) spenderAddress = BALANCER_VAULT;
         else revert InvalidSpender();
 
+        // set approval
+        approveERC20(token, spenderAddress);
+    }
+
+    /// @notice Approves a protocol to spend ERC20s in the router
+    /// @param token The token to approve
+    /// @param spenderAddress The address of the protocol to approve
+    function approveERC20(ERC20 token, address spenderAddress) internal {
         // set approval
         token.safeApprove(spenderAddress, type(uint256).max);
     }
