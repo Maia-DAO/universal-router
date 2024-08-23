@@ -61,7 +61,7 @@ abstract contract ERC4626Router is Permit2Payments {
             permit2TransferToThisAddress(address(vault), payer, shares);
         }
 
-        uint256 assets = vault.redeem(shares, address(this), recipient);
+        uint256 assets = vault.redeem(shares, recipient, address(this));
 
         // check that we received enough assets
         if (assets < minAssets) revert ERC4626TooLittleReceived();
@@ -93,7 +93,7 @@ abstract contract ERC4626Router is Permit2Payments {
     {
         permit2TransferToThisAddress(address(vault), payer, maxShares);
 
-        uint256 shares = vault.withdraw(assets, address(this), recipient);
+        uint256 shares = vault.withdraw(assets, recipient, address(this));
 
         // check that we used less than maxShares
         if (maxShares > 0) if (shares > maxShares) revert ERC4626TooMuchRequested();
