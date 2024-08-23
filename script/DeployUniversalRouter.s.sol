@@ -62,6 +62,8 @@ abstract contract DeployUniversalRouter is Script {
 
         logParams();
 
+        console2.logBytes(abi.encode(params));
+
         router = new UniversalRouter(params);
         console2.log('Universal Router Deployed:', address(router));
         vm.stopBroadcast();
